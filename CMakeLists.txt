@@ -9,3 +9,6 @@ add_executable(program
         main.cpp
         compare_files.hpp)
 target_link_libraries(program OpenSSL::SSL OpenSSL::Crypto)
+
+add_executable(generator
+        generator.cpp)
