@@ -4,6 +4,7 @@
 #include <vector>
 #include <cassert>
 #include <algorithm>
+#include <cmath>
 
 #include <openssl/sha.h>
 
@@ -50,9 +51,7 @@ struct file_data {
         if (hash != other.hash || size != other.size) {
             return false;
         }
-        std::vector<unsigned char> buffer = read_file();
-        std::vector<unsigned char> other_buffer = other.read_file();
-        return buffer == other_buffer;
+        return true;
     }
 
     std::vector<unsigned char> read_file() const {
@@ -106,7 +105,7 @@ struct similar_files_data {
 };
 
 void compare_files(const std::string& directory1, const std::string& directory2, const float threshold) {
-    std::vector<file_data>files1, files2;
+    std::vector<file_data> files1, files2;
     for (const auto& entry1: directory_iterator(directory1)) {
         files1.emplace_back(entry1.path());
     }
@@ -124,20 +123,59 @@ void compare_files(const std::string& directory1, const std::string& directory2,
                     file1.is_similar_or_equal = true;
                     file2.is_similar_or_equal = true;
                 }
-            } else {
-                bool are_similar = false;
-                float similarity;
-                if (file1.size <= file2.size) {
-                    are_similar = file1.similar(file2, threshold, similarity);
-                } else {
-                    are_similar = file2.similar(file1, threshold, similarity);
-                }
-                if (are_similar) {
-                    similar_files.emplace_back(
-                            similar_files_data{file1.path, file2.path, similarity});
-                    file1.is_similar_or_equal = true;
-                    file2.is_similar_or_equal = true;
-                }
+            }
+        }
+    }
+
+    std::sort(files1.begin(), files1.end(), [](const file_data& file1, const file_data& file2) {
+        return file1.size < file2.size;
+    });
+    std::sort(files2.begin(), files2.end(), [](const file_data& file1, const file_data& file2) {
+        return file1.size < file2.size;
+    });
+    for (auto& file: files1) {
+        size_t size1 = file.size;
+        float max_next_size = size1 / threshold;
+        size_t next_size = ceil(max_next_size);
+
+        auto max_file_iter = lower_bound(files2.begin(), files2.end(), size1,
+                                         [](const file_data& file, size_t size) {
+                                             return file.size < size;
+                                         });
+
+        for (auto it2 = max_file_iter; it2 != files2.end(); ++it2) {
+            if (it2->size > next_size) {
+                break;
+            }
+            float similarity;
+            if (file.similar(*it2, threshold, similarity)) {
+                similar_files.emplace_back(
+                        similar_files_data{file.path, it2->path, similarity});
+                file.is_similar_or_equal = true;
+                it2->is_similar_or_equal = true;
+            }
+        }
+    }
+
+    for (auto& file: files2) {
+        size_t size2 = file.size;
+        float max_next_size = size2 / threshold;
+        size_t next_size = ceil(max_next_size);
+
+        auto max_file_iter = upper_bound(files1.begin(), files1.end(), size2,
+                                         [](size_t size, const file_data& file) {
+                                             return size < file.size;
+                                         });
+        for (auto it1 = max_file_iter; it1 != files1.end(); ++it1) {
+            if (it1->size > next_size) {
+                break;
+            }
+            float similarity;
+            if (file.similar(*it1, threshold, similarity)) {
+                similar_files.emplace_back(
+                        similar_files_data{it1->path, file.path, similarity});
+                file.is_similar_or_equal = true;
+                it1->is_similar_or_equal = true;
             }
         }
     }
@@ -174,9 +212,13 @@ int main() {
     std::cout << "Enter directory 2: ";
     std::cin >> directory2;
     float threshold;
-    std::cout << "Enter threshold for similar files (float number from 0 to 1): ";
+    std::cout << "Enter threshold for similar files (float number in (0, 1]): ";
     std::cin >> threshold;
 
+    if (threshold <= 0 || threshold > 1) {
+        std::cout << "Threshold must be in (0, 1]" << std::endl;
+        return 1;
+    }
     if (!exists(directory1)) {
         std::cout << "Directory " << directory1 << " does not exist" << std::endl;
         return 1;
