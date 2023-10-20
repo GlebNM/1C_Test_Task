@@ -61,6 +61,9 @@ struct file_data {
     }
 
     bool similar(const file_data& other, const float threshold, float& similarity) const {
+        if (equals(other)) {
+            return false;
+        }
         size_t other_size = other.size;
         assert(this->size <= other_size);
         if (other_size == 0) {
@@ -75,7 +78,7 @@ struct file_data {
         for (auto it = buffer.begin(); it != buffer.end(); ++it) {
             auto pos = std::find(other_buffer.begin(), other_buffer.end(), *it);
             if (pos == other_buffer.end()) {
-                return false;
+                continue;
             }
             int count_similar = 0;
             while (pos != other_buffer.end() && it != buffer.end()) {
@@ -89,10 +92,11 @@ struct file_data {
                 }
                 ++pos;
             }
-
+            similarity = static_cast<float>(count_similar) / other_size;
+            return similarity >= threshold;
         }
-        similarity = static_cast<float>(size) / other_size;
-        return similarity >= threshold;
+
+        return false;
     }
 };
 
