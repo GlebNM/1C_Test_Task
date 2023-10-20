@@ -4,6 +4,8 @@
 #include <map>
 #include <vector>
 #include <cassert>
+#include <algorithm>
+
 #include <openssl/sha.h>
 
 using namespace std::filesystem;
@@ -62,7 +64,7 @@ struct file_data {
         return result;
     }
 
-    bool similar(const file_data& other, const float threshold) const {
+    bool similar(const file_data& other, const float threshold, float& similarity) const {
         size_t other_size = other.size;
         assert(this->size <= other_size);
         if (other_size == 0) {
@@ -73,9 +75,36 @@ struct file_data {
         }
         std::vector<unsigned char> buffer = read_file();
         std::vector<unsigned char> other_buffer = other.read_file();
+
+        for (auto it = buffer.begin(); it != buffer.end(); ++it) {
+            auto pos = std::find(other_buffer.begin(), other_buffer.end(), *it);
+            if (pos == other_buffer.end()) {
+                return false;
+            }
+            int count_similar = 0;
+            while (pos != other_buffer.end() && it != buffer.end()) {
+                while (*pos == *it) {
+                    ++count_similar;
+                    ++pos;
+                    ++it;
+                    if (pos == other_buffer.end() || it == buffer.end()) {
+                        break;
+                    }
+                }
+                ++pos;
+            }
+
+        }
+        similarity = static_cast<float>(size) / other_size;
+        return similarity >= threshold;
     }
 };
 
+struct similar_files_data {
+    path path1;
+    path path2;
+    float similarity;
+};
 
 void compare_files(const std::string& directory1, const std::string& directory2, const float threshold) {
     std::map<std::string, file_data> files1, files2;
@@ -88,14 +117,54 @@ void compare_files(const std::string& directory1, const std::string& directory2,
     }
 
     std::vector<std::pair<path, path>> equal_files;
-
-    for (const auto& file1: files1) {
-        for (const auto& file2: files2) {
+    std::vector<similar_files_data> similar_files;
+    for (auto& file1: files1) {
+        for (auto& file2: files2) {
             if (file1.second.hash == file2.second.hash && file1.second.size == file2.second.size) {
                 if (file1.second.equals(file2.second)) {
                     equal_files.emplace_back(file1.second.path, file2.second.path);
+                    file1.second.is_similar_or_equal = true;
+                    file2.second.is_similar_or_equal = true;
+                }
+            } else {
+                bool are_similar = false;
+                float similarity;
+                if (file1.second.size <= file2.second.size) {
+                    are_similar = file1.second.similar(file2.second, threshold, similarity);
+                } else {
+                    are_similar = file2.second.similar(file1.second, threshold, similarity);
+                }
+                if (are_similar) {
+                    similar_files.emplace_back(
+                            similar_files_data{file1.second.path, file2.second.path, similarity});
+                    file1.second.is_similar_or_equal = true;
+                    file2.second.is_similar_or_equal = true;
                 }
             }
+        }
+    }
+
+    std::cout << "Equal files:" << std::endl;
+    for (const auto& [path1, path2]: equal_files) {
+        std::cout << '\t' << path1 << " " << path2 << std::endl;
+    }
+
+    std::cout << "Similar files:" << std::endl;
+    for (const auto& [path1, path2, similarity]: similar_files) {
+        std::cout << '\t' << path1 << " " << path2 << " (similarity=" << similarity << ")" << std::endl;
+    }
+
+    std::cout << "Unique files in " << directory1 << ":" << std::endl;
+    for (const auto& [name, file]: files1) {
+        if (!file.is_similar_or_equal) {
+            std::cout << '\t' << file.path << std::endl;
+        }
+    }
+
+    std::cout << "Unique files in " << directory2 << ":" << std::endl;
+    for (const auto& [name, file]: files2) {
+        if (!file.is_similar_or_equal) {
+            std::cout << '\t' << file.path << std::endl;
         }
     }
 }
