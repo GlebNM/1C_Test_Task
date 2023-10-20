@@ -1,7 +1,6 @@
 #include <iostream>
 #include <filesystem>
 #include <fstream>
-#include <map>
 #include <vector>
 #include <cassert>
 #include <algorithm>
@@ -107,38 +106,37 @@ struct similar_files_data {
 };
 
 void compare_files(const std::string& directory1, const std::string& directory2, const float threshold) {
-    std::map<std::string, file_data> files1, files2;
-
+    std::vector<file_data>files1, files2;
     for (const auto& entry1: directory_iterator(directory1)) {
-        files1[entry1.path().filename().string()] = file_data(entry1.path());
+        files1.emplace_back(entry1.path());
     }
     for (const auto& entry2: directory_iterator(directory2)) {
-        files2[entry2.path().filename().string()] = file_data(entry2.path());
+        files2.emplace_back(entry2.path());
     }
 
     std::vector<std::pair<path, path>> equal_files;
     std::vector<similar_files_data> similar_files;
     for (auto& file1: files1) {
         for (auto& file2: files2) {
-            if (file1.second.hash == file2.second.hash && file1.second.size == file2.second.size) {
-                if (file1.second.equals(file2.second)) {
-                    equal_files.emplace_back(file1.second.path, file2.second.path);
-                    file1.second.is_similar_or_equal = true;
-                    file2.second.is_similar_or_equal = true;
+            if (file1.hash == file2.hash && file1.size == file2.size) {
+                if (file1.equals(file2)) {
+                    equal_files.emplace_back(file1.path, file2.path);
+                    file1.is_similar_or_equal = true;
+                    file2.is_similar_or_equal = true;
                 }
             } else {
                 bool are_similar = false;
                 float similarity;
-                if (file1.second.size <= file2.second.size) {
-                    are_similar = file1.second.similar(file2.second, threshold, similarity);
+                if (file1.size <= file2.size) {
+                    are_similar = file1.similar(file2, threshold, similarity);
                 } else {
-                    are_similar = file2.second.similar(file1.second, threshold, similarity);
+                    are_similar = file2.similar(file1, threshold, similarity);
                 }
                 if (are_similar) {
                     similar_files.emplace_back(
-                            similar_files_data{file1.second.path, file2.second.path, similarity});
-                    file1.second.is_similar_or_equal = true;
-                    file2.second.is_similar_or_equal = true;
+                            similar_files_data{file1.path, file2.path, similarity});
+                    file1.is_similar_or_equal = true;
+                    file2.is_similar_or_equal = true;
                 }
             }
         }
@@ -155,14 +153,14 @@ void compare_files(const std::string& directory1, const std::string& directory2,
     }
 
     std::cout << "Unique files in " << directory1 << ":" << std::endl;
-    for (const auto& [name, file]: files1) {
+    for (const auto& file: files1) {
         if (!file.is_similar_or_equal) {
             std::cout << '\t' << file.path << std::endl;
         }
     }
 
     std::cout << "Unique files in " << directory2 << ":" << std::endl;
-    for (const auto& [name, file]: files2) {
+    for (const auto& file: files2) {
         if (!file.is_similar_or_equal) {
             std::cout << '\t' << file.path << std::endl;
         }
