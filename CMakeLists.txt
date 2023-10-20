@@ -6,5 +6,6 @@ set(CMAKE_CXX_STANDARD 20)
 find_package(OpenSSL REQUIRED)
 
 add_executable(program
-        main.cpp)
+        main.cpp
+        compare_files.hpp)
 target_link_libraries(program OpenSSL::SSL OpenSSL::Crypto)
