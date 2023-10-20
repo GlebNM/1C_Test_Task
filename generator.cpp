@@ -2,17 +2,18 @@
 #include <filesystem>
 #include <fstream>
 #include <vector>
+#include <time.h>
 
 using namespace std::filesystem;
 
-const int CNT_BIG_EQUAL = 1;
+const int CNT_BIG_EQUAL = 5;
 const int BIG_SIZE_MB = 10;
-const int CNT_BIG_DIFFERENT = 1;
+const int CNT_BIG_DIFFERENT = 5;
 
-const int CNT_SMALL = 1;
+const int CNT_SMALL = 100;
 const int SMALL_SIZE_KB = 1;
 
-const int CNT_SIMILAR = 1;
+const int CNT_SIMILAR = 5;
 const int SIMILAR_SIZE_KB = 5;
 
 const char* dir1 = "dir1";
@@ -20,6 +21,7 @@ const char* dir2 = "dir2";
 
 
 int main() {
+    srand(time(nullptr));
     path p1(dir1);
     path p2(dir2);
 
@@ -85,13 +87,13 @@ int main() {
 
     for (int i = 0; i < CNT_SIMILAR; ++i) {
         auto buffer2 = similar_buffer;
-        int new_symbols = rand() % 1000;
+        int new_symbols = 1 + rand() % 5;
         for (int j = 0; j < new_symbols; ++j) {
-            buffer2[rand() % buffer2.size()] = rand() % 256;
+            buffer2.insert(buffer2.begin() + rand() % buffer2.size(), rand() % 256);
         }
 
         std::ofstream file2(p2 / ("similar_right" + std::to_string(i)), std::ios::binary);
-        file2.write(reinterpret_cast<char*>(similar_buffer.data()), similar_buffer.size());
+        file2.write(reinterpret_cast<char*>(buffer2.data()), buffer2.size());
         file2.close();
     }
 }
