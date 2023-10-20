@@ -13,11 +13,11 @@ using namespace std::filesystem;
 struct file_data {
     std::filesystem::path path;
     std::string name;
-    unsigned long long hash = 0;
+    unsigned char hash[SHA_DIGEST_LENGTH];
     size_t size = 0;
     bool is_similar_or_equal = false;
 
-    unsigned long long get_file_hash(const auto& path) {
+    void get_file_hash(const auto& path, unsigned char** hash) {
         unsigned long long result = 0;
         size_t size = file_size(path);
         std::vector<unsigned char> buffer(size);
@@ -25,21 +25,14 @@ struct file_data {
         file.read(reinterpret_cast<char*>(buffer.data()), size);
         file.close();
 
-        SHA_CTX ctx;
-        SHA1_Init(&ctx);
-        SHA1_Update(&ctx, buffer.data(), size);
-        unsigned char hash[SHA_DIGEST_LENGTH];
-        SHA1_Final(hash, &ctx);
-        for (unsigned char c: hash) {
-            result += c;
-        }
-        return result;
+        SHA1(buffer.data(), size, *hash);
     }
 
     explicit file_data(const auto& path) {
         this->path = path;
         name = path.filename().string();
-        hash = get_file_hash(path);
+        unsigned char* ptr = hash; //
+        get_file_hash(path, &ptr);
         size = file_size(path);
     }
 
@@ -48,8 +41,13 @@ struct file_data {
     file_data(const file_data&) = default;
 
     bool equals(const file_data& other) const {
-        if (hash != other.hash || size != other.size) {
+        if (size != other.size) {
             return false;
+        }
+        for (int i = 0; i < SHA_DIGEST_LENGTH; ++i) {
+            if (hash[i] != other.hash[i]) {
+                return false;
+            }
         }
         return true;
     }
@@ -117,12 +115,10 @@ void compare_files(const std::string& directory1, const std::string& directory2,
     std::vector<similar_files_data> similar_files;
     for (auto& file1: files1) {
         for (auto& file2: files2) {
-            if (file1.hash == file2.hash && file1.size == file2.size) {
-                if (file1.equals(file2)) {
-                    equal_files.emplace_back(file1.path, file2.path);
-                    file1.is_similar_or_equal = true;
-                    file2.is_similar_or_equal = true;
-                }
+            if (file1.equals(file2)) {
+                equal_files.emplace_back(file1.path, file2.path);
+                file1.is_similar_or_equal = true;
+                file2.is_similar_or_equal = true;
             }
         }
     }
